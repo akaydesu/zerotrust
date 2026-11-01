@@ -1,103 +1,139 @@
-# 🛡️ Zero Trust ile Discord Tünelleme
+# Cloudflare Zero Trust Üzerinden Discord Trafiğinin Yönlendirilmesi
 
-Cloudflare **Zero Trust (WARP)** kullanarak Discord trafiğini engelleri aşacak şekilde
-tünelleme rehberi. Sadece Discord tünelden geçer; oyun, banka, video gibi trafik
-normal hattan çıkar.
+Bu depo, Discord istemci trafiğinin Cloudflare Zero Trust (WARP) altyapısı üzerinden
+yönlendirilmesine ilişkin teknik dokümantasyonu içerir. Dokümanlar; kavramsal çerçeve,
+yapılandırma prosedürleri, adres envanteri, doğrulama adımları ve arıza giderme
+başlıklarını kapsar.
 
-> **Kapsam:** Windows 10/11 · Cloudflare Zero Trust ücretsiz plan · WARP istemcisi
-> **Son güncelleme:** Kasım 2025
+| Alan | Değer |
+|---|---|
+| Belge kimliği | ZT-GENEL-001 |
+| Sürüm | 1.0 |
+| Yayım tarihi | 01.11.2026 |
+| Durum | Yürürlükte |
+| Kapsam | Windows 10/11 istemcileri, Cloudflare Zero Trust ücretsiz planı |
+| Bakım sorumlusu | Depo sahibi |
 
----
+## 1. Amaç
 
-## 📚 İçindekiler
+Bu doküman seti, Discord uygulamasının ve web istemcisinin erişim engellerinden
+etkilenmeden çalışabilmesi için Cloudflare Zero Trust üzerinde kurulması gereken
+yapılandırmayı tanımlar. Kurulum; istemci tabanlı Zero Trust erişim modelini esas alır
+ve yalnızca Discord trafiğini tünele yönlendirir.
 
-| # | Dosya | Ne anlatıyor | Süre |
-|---|---|---|---|
-| 01 | [Zero Trust Nedir?](01-zero-trust-nedir.md) | Kavram, VPN farkı, bu repodaki model | 5 dk |
-| 02 | [Cloudflare Kurulumu](02-cloudflare-kurulumu.md) | Panelde takım, politika, split tunnel, MASQUE | 15 dk |
-| 03 | [IP ve DNS Listesi](03-ip-ve-dns.md) | Hızlı set (15 kayıt) + tam liste (164 kayıt) | — |
-| 04 | [WARP Kurulumu](04-warp-kurulumu.md) | İstemci kurulumu, giriş, doğrulama | 5 dk |
-| 05 | [Sorun Giderme](05-sorun-giderme.md) | Belirti → neden → çözüm tablosu | — |
-| 06 | [Otomasyon](06-otomasyon.md) | API/script ile tek seferde uygulama (opsiyonel) | 10 dk |
+Dokümanlar, yapılandırmayı sıfırdan kuracak bir teknik personelin ihtiyaç duyduğu tüm
+adımları içerecek şekilde hazırlanmıştır. Her prosedür, doğrulama adımı ile birlikte
+verilmiştir.
 
----
+## 2. Kapsam
 
-## ⚡ 5 adımda özet
+### 2.1 Kapsam içi
 
-1. **Zero Trust'u aç** → takım adı belirle (`akaydesu` gibi) → [02](02-cloudflare-kurulumu.md)
-2. **Allow politikası** oluştur (e-posta domainin) → cihaz kayıt iznine bağla
-3. **Split Tunnel → Include** yap, listeyi ekle → [03](03-ip-ve-dns.md)
-4. **Device tunnel protocol → MASQUE**
-5. **WARP'ı kur**, takım adıyla giriş yap → [04](04-warp-kurulumu.md)
+- Cloudflare Zero Trust organizasyonunun oluşturulması ve temel ayarları
+- Cihaz kayıt (enrollment) politikasının tanımlanması
+- WARP istemcisinin kurulumu ve organizasyona kaydı
+- Split Tunnel yapılandırmasının "Include" moduna alınması
+- Discord adres ve alan adı envanterinin uygulanması
+- Tünel protokolünün MASQUE olarak seçilmesi
+- Bağlantının doğrulanması ve olası arızaların giderilmesi
+- Yapılandırmanın API üzerinden otomatik uygulanması (isteğe bağlı)
 
----
+### 2.2 Kapsam dışı
 
-## 🧭 Nasıl çalışır?
+- Discord sunucularının veya botlarının barındırılması
+- Cloudflare Tunnel (cloudflared) ile hizmet yayımlanması
+- Kurumsal kimlik sağlayıcı (IdP) entegrasyonu
+- Windows dışı istemci işletim sistemleri
+- Ağ tarafında güvenlik duvarı, proxy veya QoS yapılandırması
+
+## 3. Hedef kitle ve ön koşullar
+
+Dokümanlar, ağ ve sistem yönetimi konusunda temel bilgiye sahip teknik personel için
+hazırlanmıştır. Uygulama öncesinde aşağıdaki koşullar sağlanmış olmalıdır:
+
+- Cloudflare hesabı ve Zero Trust hizmetine erişim yetkisi
+- Windows 10 veya Windows 11 istemci
+- Yerel yönetici hakları (istemci kurulumu için)
+- Discord uygulamasının kurulu olması (doğrulama adımları için)
+
+## 4. Yöntem özeti
+
+Kurulumda üç bileşen birlikte kullanılır:
+
+1. WARP istemcisi, cihaz üzerinde tüneli sonlandırır ve trafiği yönlendirir.
+2. Split Tunnel, hangi hedeflerin tünele gireceğini belirler. "Include" modunda yalnızca
+   listede tanımlı hedefler tünelden geçer.
+3. MASQUE, tünel trafiğini HTTP/3 (UDP/443) üzerinden taşır.
+
+Trafik akışı aşağıdaki gibidir:
 
 `@
-Discord.exe / tarayıcı
-       │
-       │ ① DNS: Cloudflare Gateway DoH
-       ▼
-┌──────────────────┐    Split Tunnel = Include
-│  WARP istemcisi  │    "sadece listedekiler tünele girer"
-└──────────────────┘
-       │ ② MASQUE (UDP/443, HTTP/3)
-       ▼
- Cloudflare edge  ──────►  Discord (api · gateway · cdn · voice)
-       ▲
-       └── listede olmayan trafik → doğrudan ISS hattı (etkilenmez)
+Discord istemcisi / tarayıcı
+        |
+        |  DNS sorgusu (Cloudflare Gateway DoH)
+        v
+  WARP istemcisi  -- Split Tunnel: Include
+        |
+        |  MASQUE / UDP 443
+        v
+  Cloudflare edge  --->  Discord (api, gateway, cdn, voice)
+        ^
+        +-- Listede olmayan trafik: doğrudan yerel ağ üzerinden çıkar
 `@
 
-**Neden bu yöntem?**
+Bu yaklaşımın temel avantajı, tüm sistem trafiğinin tünellenmemesidir. Böylece diğer
+uygulamaların gecikme ve bant genişliği etkilenmez.
 
-* Klasik VPN gibi tüm trafiği yavaşlatmaz — sadece Discord tünellenir
-* DNS zehirlenmesine karşı kritik uçlar sabit IP (`/32`) olarak pinlenir
-* MASQUE, UDP/2408 engelleyen ağlarda da çalışır
+## 5. Doküman seti
 
----
+| Belge | Dosya | İçerik |
+|---|---|---|
+| ZT-001 | [01-zero-trust-nedir.md](01-zero-trust-nedir.md) | Zero Trust modeli, bileşenler ve tasarım kararları |
+| ZT-002 | [02-cloudflare-kurulumu.md](02-cloudflare-kurulumu.md) | Panel üzerinden organizasyon, politika ve tünel yapılandırması |
+| ZT-003 | [03-ip-ve-dns.md](03-ip-ve-dns.md) | Adres ve alan adı envanteri, sınıflandırma ve bakım |
+| ZT-004 | [04-warp-kurulumu.md](04-warp-kurulumu.md) | İstemci kurulumu, kayıt ve bağlantı doğrulaması |
+| ZT-005 | [05-sorun-giderme.md](05-sorun-giderme.md) | Belirti, neden ve çözüm eşlemesi |
+| ZT-006 | [06-otomasyon.md](06-otomasyon.md) | Yapılandırmanın API ve betik ile uygulanması |
 
-## ✅ Gereksinimler
+## 6. Uygulama sırası
 
-* Cloudflare hesabı ([dash.cloudflare.com](https://dash.cloudflare.com))
-* Windows 10/11
-* [Cloudflare WARP](https://one.one.one.one/warp/) istemcisi
-* Discord (web veya masaüstü)
+Kurulum aşağıdaki sırayla yapılmalıdır. Adımlar birbirine bağımlıdır; sıra
+değiştirildiğinde cihaz kaydı veya tünel yapılandırması tamamlanmayabilir.
 
----
+1. Kavramsal çerçevenin gözden geçirilmesi (ZT-001)
+2. Cloudflare panelinde organizasyon ve politikaların tanımlanması (ZT-002)
+3. Adres envanterinin uygulanması (ZT-003)
+4. WARP istemcisinin kurulması ve organizasyona kaydı (ZT-004)
+5. Bağlantının doğrulanması (ZT-004, Bölüm 5)
+6. Sorun halinde arıza giderme prosedürlerinin uygulanması (ZT-005)
 
-## 📂 Depo yapısı
+## 7. Sürümleme ve bakım
 
-`@
-.
-├── README.md                    ← bu dosya
-├── 01-zero-trust-nedir.md
-├── 02-cloudflare-kurulumu.md
-├── 03-ip-ve-dns.md              ← IP / domain listesi
-├── 04-warp-kurulumu.md
-├── 05-sorun-giderme.md
-├── 06-otomasyon.md
-└── scripts/
-    ├── Apply-DiscordZeroTrust.ps1   ← listeyi + MASQUE'i API ile uygular
-    ├── Verify-DiscordTunnel.ps1     ← 15 testlik doğrulama
-    └── discord-routes.txt           ← 164 kural (script girdisi)
-`@
+Dokümanlar Git üzerinde sürümlenir. Her değişiklik, commit mesajında değişen belge
+kimliğini belirtecek şekilde kaydedilir. Ayrıntılı değişiklik geçmişi depo commit
+kayıtlarında tutulur.
 
----
+Adres envanteri (ZT-003) dış kaynaklı veriler içerdiğinden düzenli aralıklarla
+doğrulanmalıdır. Doğrulama yöntemi ilgili belgede açıklanmıştır.
 
-## ⚠️ Notlar
+## 8. Güvenlik ve uyum notları
 
-* Bu rehber **sunucu yayınlama** değildir; kendi cihazının **giden** trafiğini yönlendirir.
-  Cloudflare Tunnel (`cloudflared`) ile karıştırılmamalıdır → [01](01-zero-trust-nedir.md)
-* Ücretsiz plan **50 kullanıcı/cihaz** ile sınırlıdır.
-* `162.159.128.0/19` ve `104.18.0.0/20` Cloudflare'ın genel bloklarıdır; bu aralıklardaki
-  başka siteler de tünele girer. Ayrıntı: [03](03-ip-ve-dns.md)
-* Kullanım sorumluluğu sana aittir; bulunduğun ülkenin mevzuatına ve kullandığın
-  hizmetlerin şartlarına uy.
+- Dokümanlarda kimlik bilgisi, API anahtarı veya kuruma özel bilgi bulunmaz.
+- API anahtarları yalnızca ilgili prosedür sırasında, geçici olarak kullanılmalıdır.
+- Kurulum, cihazın giden trafiğini üçüncü taraf bir ağ üzerinden yönlendirir. Bu durum,
+  kurumsal güvenlik politikaları ve yerel mevzuat açısından değerlendirilmelidir.
+- Ücretsiz plan, kullanıcı ve cihaz sayısı açısından sınırlıdır; üretim ortamında lisans
+  koşulları ayrıca kontrol edilmelidir.
 
----
+## 9. Kaynakça
 
-## 🙏 Kaynak
+- Cloudflare One dokümantasyonu: <https://developers.cloudflare.com/cloudflare-one/>
+- Split Tunnels: <https://developers.cloudflare.com/cloudflare-one/connections/connect-devices/warp/configure-warp/route-traffic/split-tunnels/>
+- WARP istemcisi: <https://one.one.one.one/warp/>
+- Adres envanterinin bir bölümü: <https://github.com/sertay1/WarpZeroTrustConfigure>
 
-IP/domain listesinin bir kısmı [sertay1/WarpZeroTrustConfigure](https://github.com/sertay1/WarpZeroTrustConfigure)
-projesinden, bir kısmı Cloudflare/Discord'un yayınladığı aralıklardan derlenmiştir.
+## 10. Sürüm geçmişi
+
+| Sürüm | Tarih | Açıklama |
+|---|---|---|
+| 1.0 | 01.11.2026 | Doküman setinin yayımlanması |

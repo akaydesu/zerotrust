@@ -1,66 +1,114 @@
-# ⚙️ Otomasyon — API ile tek seferde uygulama
+# Yapılandırmanın API ile Uygulanması
 
-Panelde 164 kaydı tek tek girmek istemiyorsan bu bölüm. İsteğe bağlıdır;
-manuele göre 10 dakika yerine ~30 saniye sürer.
+| Alan | Değer |
+|---|---|
+| Belge kimliği | ZT-006 |
+| Sürüm | 1.0 |
+| Yayım tarihi | 01.11.2026 |
+| İlgili belgeler | ZT-002, ZT-003 |
+| Ön koşul | ZT-002, Bölüm 3-5 tamamlanmış olmalı |
 
-> ⚠️ Bu script **senin makinende** çalışır ve **senin** Cloudflare hesabına yazar.
-> Token gerekir. Token'ı kimseyle paylaşma, repoya koyma.
+## 1. Amaç
 
----
+Bu belge, split tunnel envanterinin ve tünel protokolü ayarının Cloudflare API'si
+üzerinden uygulanmasını tanımlar. Yöntem, panel üzerinden yüz altmış dört kaydın tek tek
+girilmesi yerine kullanılır ve yapılandırmanın tekrarlanabilir olmasını sağlar.
 
-## 1. API token oluştur
+## 2. Kapsam ve sınırlar
 
-1. <https://dash.cloudflare.com> → sağ üst profil → **My Profile → API Tokens**
-2. **Create Token → Create Custom Token**
-3. Ayarlar:
-   * **Permissions:** `Account` → `Zero Trust` → **Edit**
-   * **Account Resources:** Include → kendi hesabın
-   * **TTL:** boş (veya 1 ay)
-4. **Continue → Create token** → token **bir kez** gösterilir, kopyala
+- İşlem, Cloudflare hesabına yazma yetkisi gerektirir.
+- Betikler Windows PowerShell üzerinde çalışır.
+- Betikler yalnızca split tunnel listesini ve protokol ayarını değiştirir; organizasyon,
+  politika ve cihaz kayıt ayarlarına dokunmaz.
+- İşlem idempotenttir: aynı betik birden fazla kez çalıştırıldığında liste çoğalmaz.
 
----
+## 3. API anahtarı
 
-## 2. Script'i çalıştır
+### 3.1 Anahtar oluşturma
 
-`@powershell
+1. <https://dash.cloudflare.com> adresinde oturum açın.
+2. Sağ üst menüden **My Profile > API Tokens** bölümüne gidin.
+3. **Create Token > Create Custom Token** seçeneğini kullanın.
+4. Aşağıdaki yetkileri tanımlayın:
+
+| Alan | Değer |
+|---|---|
+| Permissions | Account > Zero Trust > Edit |
+| Account Resources | Include > ilgili hesap |
+| TTL | Boş veya 30 gün |
+
+5. Anahtarı oluşturun. Anahtar yalnızca bir kez görüntülenir.
+
+### 3.2 Anahtarın kullanımı
+
+Anahtar; ortam değişkeni ile veya betiğin gizli giriş istemi üzerinden verilir.
+Kaynak kod, doküman veya commit içine yazılmamalıdır.
+
+```powershell
+$env:CF_API_TOKEN = "<api-anahtari>"
+```
+
+### 3.3 Anahtarın iptali
+
+İşlem tamamlandığında anahtar **Roll** veya **Delete** edilir. Anahtar yalnızca Zero
+Trust yetkisi taşıdığından, sızması durumunda etki alanı bu hizmetle sınırlıdır.
+
+## 4. Betikler
+
+| Dosya | İşlev |
+|---|---|
+| scripts/Apply-DiscordZeroTrust.ps1 | Envanteri ve protokol ayarını uygular |
+| scripts/Verify-DiscordTunnel.ps1 | Bağlantı ve yapılandırma doğrulaması yapar |
+| scripts/discord-routes.txt | Uygulanacak kural listesi |
+
+Betikler, çalıştırıldıkları dizindeki `discord-routes.txt` dosyasını girdi olarak
+kullanır. Farklı bir liste uygulanacaksa `-RoutesFile` parametresi ile yol verilir.
+
+## 5. Uygulama prosedürü
+
+### 5.1 Ön izleme
+
+Hiçbir değişiklik yapılmadan, mevcut liste ile hedef liste arasındaki fark görüntülenir:
+
+```powershell
 cd scripts
-
-# 1) Hiçbir şey değiştirmeden farkı gör
 .\Apply-DiscordZeroTrust.ps1 -DryRun
+```
 
-# 2) Uygula (token'ı gizli sorar)
+Çıktıda mevcut kural sayısı, eklenecek kural sayısı ve toplam kural sayısı yer alır.
+Bu adım, uygulama öncesinde değişikliğin doğrulanması için zorunlu tutulmalıdır.
+
+### 5.2 Uygulama
+
+```powershell
 .\Apply-DiscordZeroTrust.ps1
+```
 
-# 3) Doğrula
+Betik, API anahtarını gizli giriş ile ister. Anahtar ortam değişkeninde tanımlıysa
+yeniden sorulmaz.
+
+### 5.3 Doğrulama
+
+```powershell
 .\Verify-DiscordTunnel.ps1
-`@
+```
 
-Token'ı ortam değişkeniyle de verebilirsin:
+Betik; hizmet durumu, organizasyon kaydı, protokol, split tunnel kapsamı, DNS, port ve
+HTTPS kontrollerini yapar ve sonuçları listeler.
 
-`@powershell
-$env:CF_API_TOKEN = "...."
-.\Apply-DiscordZeroTrust.ps1
-`@
+## 6. Betiğin işlem sırası
 
----
+1. `warp-cli` üzerinden hesap kimliği okunur.
+2. Mevcut include listesi API üzerinden alınır.
+3. Mevcut liste, zaman damgalı bir dosya olarak yedeklenir.
+4. Hedef liste ile mevcut liste birleştirilir; mevcut kayıtlar korunur.
+5. Birleşik liste `PUT /accounts/{account_id}/devices/policy/include` ile yazılır.
+6. Protokol `PATCH /accounts/{account_id}/devices/policy` ile MASQUE yapılır.
+7. İstemci yeniden bağlanır ve sonuç doğrulanır.
 
-## 3. Script ne yapıyor?
+## 7. Örnek çıktı
 
-1. `warp-cli`'dan **hesap ID**'sini bulur
-2. Mevcut include listesini API'den çeker
-3. `backup/include-<tarih>.json` olarak **yedekler**
-4. Listeyi **birleştirir** — mevcut kayıtlar silinmez, yeni Discord kuralları eklenir
-5. `PUT /accounts/{id}/devices/policy/include` ile yazar
-6. `PATCH /accounts/{id}/devices/policy` → `{"tunnel_protocol":"masque"}`
-7. WARP'ı disconnect/connect eder, sonucu doğrular
-
-Kaç kez çalıştırırsan çalıştır aynı sonucu verir (idempotent).
-
----
-
-## 4. Örnek çıktı
-
-`@text
+```text
 == Discord / Cloudflare Zero Trust - Split Tunnel kurulumu ==
   Rota dosyasi           ...\scripts\discord-routes.txt
   Kural sayisi           164
@@ -72,43 +120,58 @@ Kaç kez çalıştırırsan çalıştır aynı sonucu verir (idempotent).
   [OK]   164 kural yazildi.
 == Tunel protokolu -> MASQUE ==
   [OK]   Protokol masque olarak ayarlandi.
-`@
+```
 
----
+## 8. Manuel API kullanımı
 
-## 5. Elle (PowerShell) yapmak istersen
+Betik kullanılmadan, aynı işlemler PowerShell üzerinden yapılabilir:
 
-`@powershell
+```powershell
 $acc   = "<account-id>"
-$token = "<api-token>"
+$token = "<api-anahtari>"
 $h = @{ Authorization = "Bearer $token"; 'Content-Type' = 'application/json' }
 
-# mevcut listeyi gör
+# Mevcut listenin okunması
 Invoke-RestMethod -Uri "https://api.cloudflare.com/client/v4/accounts/$acc/devices/policy/include" -Headers $h
 
-# protokolü MASQUE yap
+# Protokol ayarı
 Invoke-RestMethod -Method Patch -Uri "https://api.cloudflare.com/client/v4/accounts/$acc/devices/policy" -Headers $h -Body '{"tunnel_protocol":"masque"}'
 
-# listeyi yaz (gövde: [{"address":"162.159.128.0/19"},{"host":"discord.com"}, ...])
+# Listenin yazılması
 Invoke-RestMethod -Method Put -Uri "https://api.cloudflare.com/client/v4/accounts/$acc/devices/policy/include" -Headers $h -Body $json
-`@
+```
 
----
+`$json` değişkeni, aşağıdaki biçimde bir dizi içermelidir:
 
-## 6. Geri alma
+```json
+[
+  { "address": "162.159.128.0/19", "description": "Cloudflare anycast" },
+  { "host": "discord.com", "description": "Discord" }
+]
+```
 
-`backup/` içindeki JSON, uygulama **öncesi** listeyi tutar. Dönmek için:
+## 9. Yedekleme ve geri alma
 
-`@powershell
-$old = Get-Content .\backup\include-20251101-184500.json -Raw
+Betik her çalışmada mevcut listeyi `backup/include-<tarih>.json` dosyasına yazar.
+Geri alma işlemi, bu dosyanın içeriğinin aynı uç noktaya gönderilmesiyle yapılır:
+
+```powershell
+$old = Get-Content .\backup\include-20261101-120000.json -Raw
 Invoke-RestMethod -Method Put -Uri "https://api.cloudflare.com/client/v4/accounts/$acc/devices/policy/include" -Headers $h -Body $old
-`@
+```
 
----
+`backup` dizini sürüm kontrolüne dahil edilmez.
 
-## 7. Güvenlik
+## 10. Güvenlik gereklilikleri
 
-* Token yalnızca **Zero Trust: Edit** yetkisi taşır; başka hesap kaynaklarına erişemez
-* Script token'ı **loglamaz**, dosyaya yazmaz, ekrana basmaz
-* İş bitince token'ı **Roll** veya **Delete** et
-* `backup/` klasörünü repoya **commit etme** (`.gitignore` içinde)
+- API anahtarı en az yetki ilkesine göre oluşturulur; yalnızca Zero Trust yetkisi verilir.
+- Anahtar; betik çıktısına, günlük dosyalarına veya komut geçmişine yazılmamalıdır.
+- Betikler yalnızca yönetimsel iş istasyonlarında çalıştırılmalıdır.
+- Değişiklikler, üretim kullanıcılarını etkilemeden önce pilot bir cihazda doğrulanır.
+- İşlem sonrasında anahtar iptal edilir ve yedek dosyaları erişim denetimli bir
+  konumda saklanır.
+
+## 11. İlgili belgeler
+
+- Panel yapılandırması: [02-cloudflare-kurulumu.md](02-cloudflare-kurulumu.md)
+- Adres envanteri: [03-ip-ve-dns.md](03-ip-ve-dns.md)

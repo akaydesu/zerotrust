@@ -1,88 +1,134 @@
-# 🧠 Zero Trust Nedir?
+# Zero Trust Modeli ve Kurulum Mimarisi
 
-**Zero Trust**, "ağın içindesin, o hâlde güvenilirsin" varsayımını reddeden güvenlik modelidir.
-Temel kural:
-
-> **"Asla güvenme, her zaman doğrula."**
-
-Kullanıcı, cihaz ve uygulama her erişimde yeniden kontrol edilir. Bu repoda Zero Trust,
-**Discord trafiğini engelleri aşacak şekilde tünellemek** için kullanılıyor.
-
----
-
-## 📌 Temel ilkeler
-
-1. **Kimlik tabanlı erişim** — kullanıcı + cihaz + konum birlikte değerlendirilir
-2. **En az yetki** — sadece gereken kaynağa, gereken süre kadar erişim
-3. **Sürekli doğrulama** — her bağlantı yeniden denetlenir
-4. **Ağ segmentasyonu** — trafik parçalanır, her parça ayrı kuralla yönetilir
-5. **Görünürlük** — tüm erişimler kaydedilir ve analiz edilir
-
----
-
-## 🆚 Klasik VPN ile farkı
-
-| Kriter | Klasik VPN | Zero Trust (ZTNA) |
-|---|---|---|
-| Erişim yaklaşımı | Ağa giren herkes güvenilir | Her erişim noktasında doğrulama |
-| Kaynak erişimi | Tüneldeki herkes her yere | Sadece tanımlı uygulama/kaynak |
-| Trafik kapsamı | Genelde **tüm** trafik | **Seçili** uygulama/domain (split tunnel) |
-| Ölçeklenebilirlik | Zayıf | Yüksek |
-| Gecikme etkisi | Tüm trafik etkilenir | Sadece seçili trafik etkilenir |
-
-Bu repodaki kurulumda **sadece Discord** tünelden geçer; oyun, banka, video gibi
-trafik normal hattan çıkar. VPN'in "her şeyi yavaşlatma" sorunu oluşmaz.
-
----
-
-## 🤖 Discord'da ne işe yarar?
-
-* ISS veya ülke bazlı IP/DNS engellerini aşmak
-* Discord'un web + masaüstü + ses trafiğini şifreli tünele almak
-* DNS zehirlenmesine karşı sabit IP (`/32`) kullanmak
-* Diğer uygulamaları etkilemeden sadece Discord'u yönlendirmek
-
----
-
-## 🧱 Bu repoda kullanılan model
-
-Burada **Cloudflare Tunnel (`cloudflared`) kullanılmıyor.** Karıştırılan iki ürün var:
-
-| Ürün | Ne yapar | Bu repoda |
-|---|---|---|
-| **Cloudflare Tunnel** (`cloudflared`) | Sunucudaki bir servisi internete açar (gelen trafik) | ❌ kullanılmıyor |
-| **Cloudflare WARP + Zero Trust** | Cihazın **giden** trafiğini Cloudflare üzerinden yönlendirir | ✅ kullanılıyor |
-
-Yani burada bir sunucu yayınlamıyoruz; **kendi bilgisayarımızın Discord trafiğini**
-Cloudflare'in ağına sokuyoruz.
-
-```
-Discord.exe / tarayıcı
-       │
-       │ ① DNS: Gateway DoH
-       ▼
-┌──────────────────┐   Split Tunnel (Include)
-│  WARP istemcisi  │   "sadece listedekiler tünele girer"
-└──────────────────┘
-       │ MASQUE (UDP/443)
-       ▼
- Cloudflare edge  ──────►  Discord (api / gateway / cdn / voice)
-       ▲
-       └── listede olmayan trafik: doğrudan ISS hattı
-```
-
----
-
-## 🧩 Yapı taşları
-
-| Bileşen | Görevi |
+| Alan | Değer |
 |---|---|
-| **Zero Trust organizasyonu** | Takım adı, kullanıcı/cihaz kaydı |
-| **Access politikası** | Hangi e-postaların cihaz kaydedebileceğini belirler |
-| **WARP istemcisi** | Cihazda tüneli açar, trafiği yönlendirir |
-| **Split Tunnel** | Hangi trafiğin tünele gireceğini belirler (Include/Exclude) |
-| **MASQUE** | Tünel protokolü (HTTP/3, UDP/443) |
+| Belge kimliği | ZT-001 |
+| Sürüm | 1.0 |
+| Yayım tarihi | 01.11.2026 |
+| İlgili belgeler | ZT-002, ZT-003, ZT-004 |
 
----
+## 1. Amaç
 
-Devam 👉 [02-cloudflare-kurulumu.md](02-cloudflare-kurulumu.md)
+Bu belge, kurulumun dayandığı Zero Trust modelini, kullanılan Cloudflare bileşenlerini
+ve tasarım kararlarının gerekçelerini açıklar. Yapılandırma adımlarına geçmeden önce
+okunması önerilir; zira izleyen belgelerdeki seçimler buradaki model üzerine kuruludur.
+
+## 2. Zero Trust modeli
+
+### 2.1 Tanım
+
+Zero Trust, bir ağın içinde bulunmanın güven için yeterli sayılmadığı güvenlik
+yaklaşımıdır. Geleneksel çevre güvenliği modellerinde ağ sınırı güvenilir kabul edilir
+ve sınırın içindeki trafik büyük ölçüde denetlenmez. Zero Trust bu varsayımı ortadan
+kaldırır: her erişim isteği, kaynağına ve hedefine bakılmaksızın kimlik, cihaz durumu
+ve politika koşullarına göre yeniden değerlendirilir.
+
+### 2.2 Temel ilkeler
+
+1. **Kimlik tabanlı erişim.** Erişim kararı; kullanıcı kimliği, cihaz kimliği ve
+   bağlantı bağlamı üzerinden verilir.
+2. **En az yetki.** Kullanıcı ve cihaz, yalnızca tanımlı kaynaklara ve tanımlı süre
+   boyunca erişir.
+3. **Sürekli doğrulama.** Erişim, oturum başında bir kez verilen bir izin değildir;
+   oturum boyunca koşullar yeniden değerlendirilir.
+4. **Ağ segmentasyonu.** Trafik, uygulama ve hedef bazında ayrıştırılır; her parça
+   ayrı politika ile yönetilir.
+5. **Görünürlük.** Tüm erişim kararları kayıt altına alınır ve denetlenebilir.
+
+Bu kurulumda ilkelerden özellikle ikincisi ve dördüncüsü belirleyicidir: cihazın tüm
+trafiği değil, yalnızca Discord'a ait hedefler tünele alınır.
+
+## 3. ZTNA ve geleneksel VPN
+
+| Ölçüt | Geleneksel VPN | Zero Trust (ZTNA) |
+|---|---|---|
+| Erişim kararı | Ağa bağlanan herkes güvenilir kabul edilir | Her erişim isteği ayrıca değerlendirilir |
+| Kaynak kapsamı | Tünel üzerinden tüm ağa erişim | Yalnızca tanımlı uygulama ve hedefler |
+| Trafik kapsamı | Genellikle tüm trafik tünellenir | Seçili hedefler tünellenir (split tunnel) |
+| Gecikme etkisi | Tüm uygulamalar etkilenir | Yalnızca tünellenen trafik etkilenir |
+| Ölçeklenebilirlik | Merkezi toplama noktasına bağımlıdır | Dağıtık kenar ağı üzerinden ölçeklenir |
+
+Bu kurulumda VPN benzeri bir tüm-trafik yönlendirmesi kullanılmaz. Amaç, Discord
+trafiğini tünele alırken diğer uygulamaların yerel ağ üzerinden çıkmasını sürdürmektir.
+Bu nedenle "split tunnel" yapılandırması kurulumun merkezinde yer alır.
+
+## 4. Kullanılan Cloudflare bileşenleri
+
+| Bileşen | İşlev | Bu kurulumdaki rolü |
+|---|---|---|
+| Zero Trust organizasyonu | Kullanıcı, cihaz ve politika yönetimi | Cihaz kaydının yapıldığı yapı |
+| Access politikası | Kaynak ve cihaz erişim kuralları | Hangi e-posta adreslerinin cihaz kaydedebileceğini belirler |
+| WARP istemcisi | Cihazda tünel sonlandırma | Tüneli kurar ve trafiği yönlendirir |
+| Gateway (DNS) | DNS çözümleme ve filtreleme | Discord alan adlarının çözümlenmesi |
+| Split Tunnel | Tünel kapsamı | Yalnızca Discord hedeflerinin tünellenmesi |
+| MASQUE | Tünel taşıma protokolü | HTTP/3 üzerinden UDP/443 taşıma |
+
+WARP istemcisi, cihaz üzerinde bir sanal ağ arayüzü oluşturur ve işletim sisteminin
+yönlendirme tablosunu bu arayüz lehine değiştirir. Hangi hedeflerin bu arayüze
+yönlendirileceği, Split Tunnel listesi ile belirlenir.
+
+## 5. Cloudflare Tunnel ile farkı
+
+Cloudflare'in iki farklı ürünü sıkça karıştırılmaktadır. Bu kurulumda kullanılan ürün
+WARP'tır; Cloudflare Tunnel (cloudflared) kullanılmaz.
+
+| Ürün | Trafik yönü | Kullanım amacı |
+|---|---|---|
+| Cloudflare Tunnel (cloudflared) | Gelen (inbound) | Sunucuda çalışan bir hizmeti internete açar |
+| WARP + Zero Trust | Giden (outbound) | Cihazın trafiğini Cloudflare üzerinden yönlendirir |
+
+Bu nedenle dokümanlarda "tünelleme" ifadesi, cihazın giden trafiğinin yönlendirilmesi
+anlamında kullanılmaktadır. Sunucu tarafında bir hizmet yayımlanmaz.
+
+## 6. Trafik akışı
+
+`@
+1. Uygulama, hedef alan adı için DNS sorgusu üretir.
+2. Sorgu, WARP istemcisi tarafından Cloudflare Gateway'e (DoH) iletilir.
+3. Dönen adres, Split Tunnel listesi ile karşılaştırılır.
+4. Hedef listede ise bağlantı WARP tüneli üzerinden kurulur.
+5. Hedef listede değilse bağlantı yerel ağ üzerinden doğrudan kurulur.
+`@
+
+Tünel üzerinden taşınan trafik, MASQUE protokolü kullanıldığında UDP/443 üzerinde
+HTTP/3 oturumu içinde iletilir. Bu tercih, UDP/2408 (WireGuard) trafiğinin kısıtlandığı
+ağlarda bağlantı sürekliliği sağlar.
+
+## 7. Tasarım kararları
+
+### 7.1 Split Tunnel modunun "Include" seçilmesi
+
+"Include" modunda yalnızca listede tanımlı hedefler tünele girer. "Exclude" modunda ise
+liste dışındaki tüm trafik tünellenir. Discord odaklı bir kurulumda "Include" modu
+tercih edilir; çünkü diğer uygulamaların trafiği etkilenmez ve tünel üzerindeki yük
+asgari düzeyde kalır.
+
+### 7.2 Alan adı ve IP'nin birlikte kullanılması
+
+Alan adı kuralları DNS çözümlemesine bağlıdır. DNS yanıtının değiştirildiği veya
+engellendiği durumlarda alan adı kuralı tek başına yeterli olmaz. Bu nedenle kritik uç
+noktalar, sabit IP adresi (/32) olarak da tanımlanır. Bu kayıtlar DNS sorgusundan
+bağımsız olarak tünele yönlendirilir.
+
+### 7.3 MASQUE protokolünün seçilmesi
+
+WireGuard, UDP/2408 üzerinde çalışır ve bazı ağlarda bu port aralığı kısıtlanır.
+MASQUE, HTTP/3 kullanarak trafiği UDP/443 üzerinden taşır. Bu port, standart HTTPS
+trafiği ile aynı olduğundan kısıtlama olasılığı daha düşüktür.
+
+## 8. Sınırlamalar
+
+- Kurulum, cihazın giden trafiğini Cloudflare ağı üzerinden yönlendirir; trafik
+  Cloudflare'in kabul ettiği bölgesel uç noktalardan çıkar.
+- Adres envanterinde yer alan geniş Cloudflare blokları, Discord dışındaki bazı
+  hizmetlerin de tünele girmesine neden olabilir. Bu durum ZT-003'te ayrıca ele
+  alınmıştır.
+- Ücretsiz plan, kullanıcı ve cihaz sayısı ile sınırlıdır.
+- Kurulum, yerel ağ politikalarını (proxy, güvenlik duvarı) değiştirmez; bu katmanlarda
+  ek kısıtlama varsa bağlantı yine etkilenebilir.
+
+## 9. İlgili belgeler
+
+- Kurulum prosedürü: [02-cloudflare-kurulumu.md](02-cloudflare-kurulumu.md)
+- Adres envanteri: [03-ip-ve-dns.md](03-ip-ve-dns.md)
+- İstemci kurulumu: [04-warp-kurulumu.md](04-warp-kurulumu.md)

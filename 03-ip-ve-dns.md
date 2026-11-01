@@ -1,38 +1,61 @@
-# 📡 IP ve DNS Listesi
+# Adres ve Alan Adı Envanteri
 
-Split Tunnel **Include** listesine eklenecek hedeflerin tamamı bu dosyada.
-İki seçenek var: **hızlı set** (15 kayıt, 5 dakikada biter) veya **tam liste** (164 kayıt).
+| Alan | Değer |
+|---|---|
+| Belge kimliği | ZT-003 |
+| Sürüm | 1.0 |
+| Yayım tarihi | 01.11.2026 |
+| Toplam kayıt | 164 |
+| İlgili belgeler | ZT-002, ZT-004, ZT-006 |
 
-> Buradaki her satır, Cloudflare panelinde tek bir kayıt (destination) demektir.
-> IP'ler **IP Address**, alan adları **Domain** olarak eklenir.
+## 1. Amaç
 
----
+Bu belge, Cloudflare Zero Trust split tunnel yapılandırmasında kullanılacak hedeflerin
+envanterini tanımlar. Envanter iki düzeyde sunulur: hızlı kurulum için yeterli olan
+asgari set ve tüm uç noktaları kapsayan tam envanter.
 
-## 📊 Özet
+## 2. Sınıflandırma
 
-| Grup | Kayıt | Ne için |
+| Grup | Kayıt sayısı | Kapsam |
 |---|---:|---|
-| Alan adları (domain) | 84 | Web, API, gateway, CDN, güncelleme, davet linkleri |
-| Cloudflare anycast IPv4 | 32 | Discord frontend + CDN (162.159.x, 104.18.x) |
-| Discord ses / RTC IPv4 | 32 | Ses kanalları, ekran ve video paylaşımı (66.22.x) |
-| Google Cloud IPv4 | 11 | Discord'un GCP üzerindeki bileşenleri (34.x, 35.x) |
-| IPv6 | 4 | Cloudflare IPv6 aralıkları (geniş kapsam, opsiyonel) |
+| Alan adları | 84 | Web, API, gateway, CDN, güncelleme ve davet alan adları |
+| Cloudflare anycast (IPv4) | 32 | Discord ön yüz ve CDN blokları |
+| Discord ses / RTC (IPv4) | 32 | Ses, görüntü ve ekran paylaşımı uç noktaları |
+| Google Cloud (IPv4) | 11 | Discord'un Google Cloud üzerindeki bileşenleri |
+| IPv6 | 4 | Cloudflare IPv6 blokları (isteğe bağlı) |
 | Diğer | 1 | Tekil uç nokta |
 | **Toplam** | **164** | |
 
----
+Kayıtlar panelde iki türde girilir: IP ve CIDR blokları "IP Address", alan adları
+"Domain" olarak tanımlanır. Joker kayıtlar (`*.alanadi`) alt alan adlarını kapsar.
 
-## 🚀 A. Hızlı set — 15 kayıt (önerilen başlangıç)
+## 3. Envanterin kaynağı
 
-Amaç: tek tek 164 satır girmek yerine, **tüm Discord trafiğini kapsayan** en küçük set.
+Envanter üç kaynaktan derlenmiştir:
 
-Mantık:
+1. Discord istemcisinin kullandığı, kamuya açık alan adları.
+2. Cloudflare'in yayımladığı anycast blokları.
+3. Açık kaynak bir yapılandırma aracının (WarpZeroTrustConfigure) listesi.
 
-* `162.159.128.0/19` → `162.159.128.0 – 162.159.159.255` aralığı; listedeki bütün `162.159.x` kayıtlarını (web, API, gateway, CDN) tek satırda kapsar.
-* `66.22.192.0/18` → `66.22.192.0 – 66.22.255.255`; Discord ses/RTC bloklarının tamamı bu aralıkta.
-* `104.18.0.0/20` + iki `/32` → Discord'un Cloudflare CDN uçları.
+Üçüncü kaynak yalnızca veri olarak kullanılmıştır; ilgili yazılım bu kurulumda
+çalıştırılmaz. Envanterin güncelliği, Bölüm 7'deki prosedürle periyodik olarak
+doğrulanmalıdır.
 
-### Domainler (10)
+## 4. Hızlı kurulum seti
+
+Tüm envanterin girilmesi zaman aldığından, çoğu kullanım senaryosu için yeterli olan
+asgari set aşağıda tanımlanmıştır. Bu set, geniş bloklar kullanarak tek tek kayıt
+girme ihtiyacını ortadan kaldırır.
+
+| Kayıt | Kapsam |
+|---|---|
+| 162.159.128.0/19 | 162.159.128.0 - 162.159.159.255 aralığı; envanterdeki tüm 162.159.x kayıtlarını kapsar |
+| 66.22.192.0/18 | 66.22.192.0 - 66.22.255.255 aralığı; ses/RTC bloklarının tamamını kapsar |
+| 104.18.0.0/20 | Cloudflare CDN bloğu |
+| 104.16.51.111/32 | CDN uç noktası |
+| 104.18.48.115/32 | CDN uç noktası |
+
+### 4.1 Alan adları
 
 ```text
 discord.com
@@ -47,7 +70,7 @@ discord.media
 *.discord.media
 ```
 
-### IP / CIDR (5)
+### 4.2 IP ve CIDR
 
 ```text
 162.159.128.0/19
@@ -57,13 +80,12 @@ discord.media
 104.18.48.115/32
 ```
 
-> Bu set çoğu kullanıcı için yeterlidir. Ses kanalında kopma yaşarsan tam listeye geç.
+Bu set ile toplam 15 kayıt tanımlanmış olur. Ses kanallarında kopma veya medya
+yüklenmesinde sorun görülürse Bölüm 5'teki tam envantere geçilmelidir.
 
----
+## 5. Tam envanter
 
-## 🧩 B. Tam liste — 164 kayıt
-
-### 1) Alan adları (84)
+### 5.1 Alan adları (84)
 
 ```text
 *.bigbeans.solutions
@@ -152,7 +174,7 @@ versions.discord.com
 watchanimeattheoffice.com
 ```
 
-### 2) Cloudflare anycast IPv4 (32)
+### 5.2 Cloudflare anycast, IPv4 (32)
 
 ```text
 104.16.51.111
@@ -189,7 +211,7 @@ watchanimeattheoffice.com
 162.159.138.232/32
 ```
 
-### 3) Discord ses / RTC IPv4 (32)
+### 5.3 Discord ses / RTC, IPv4 (32)
 
 ```text
 66.22.196.0/22
@@ -226,7 +248,7 @@ watchanimeattheoffice.com
 66.22.248.0/24
 ```
 
-### 4) Google Cloud IPv4 (11)
+### 5.4 Google Cloud, IPv4 (11)
 
 ```text
 34.0.240.0/20
@@ -242,7 +264,7 @@ watchanimeattheoffice.com
 35.215.192.0/18
 ```
 
-### 5) IPv6 (4) — opsiyonel
+### 5.5 IPv6 (4, isteğe bağlı)
 
 ```text
 2400:cb00::/32
@@ -251,50 +273,60 @@ watchanimeattheoffice.com
 2a06:98c0::/29
 ```
 
-> Bu dört blok Cloudflare'ın **tüm** IPv6 uzayının bir kısmıdır; sadece IPv6 kullanıyorsan
-> veya IPv6'da sorun yaşıyorsan ekle. Aksi halde gerek yok.
+IPv6 blokları, cihaz ağında IPv6 etkinse ve bağlantı sorunları IPv6 üzerinde
+gözleniyorsa eklenmelidir. IPv4 yeterli olduğunda bu kayıtlar atlanabilir.
 
-### 6) Diğer (1)
+### 5.6 Diğer (1)
 
 ```text
 198.244.231.90/32
 ```
 
----
+## 6. Adres seçiminin gerekçesi
 
-## ❓ Neden bu IP'ler var?
+**Sabit IP kayıtları (/32).** Alan adı kuralları DNS yanıtına bağlıdır. DNS yanıtının
+değiştirildiği ağlarda alan adı kuralı yanlış adrese yönlendirme yapabilir. Kritik uç
+noktaların sabit IP olarak tanımlanması, çözümleme sonucundan bağımsız olarak trafiğin
+tünele girmesini sağlar.
 
-| Kayıt | Açıklama |
-|---|---|
-| `162.159.128.0/19` | Cloudflare anycast. Discord'un web, API ve gateway trafiği buradan çıkar. DNS zehirlenmesine karşı `/32` pinleri de bu bloğun içinde. |
-| `66.22.x` | Discord ses (RTC) sunucuları. Ses kanalı, ekran paylaşımı ve video bu bloklara gider. |
-| `104.18.x`, `104.16.x` | Discord CDN / medya. |
-| `34.x`, `35.x` | Discord'un Google Cloud üzerinde çalışan bileşenleri. |
-| `discord.gg`, `*.discord.gg` | Davet linkleri ve `gateway.discord.gg`. |
-| `*.discordapp.com`, `*.discordapp.net` | CDN, medya, ek görseller. |
+**Geniş anycast blokları.** Discord, Cloudflare anycast ağı üzerinden hizmet verir.
+Tek tek IP tanımlamak yerine bloğun tamamının tanımlanması, adres değişikliklerinde
+yapılandırmanın geçerliliğini korur.
 
-**Neden hem domain hem IP?** Domain kuralı DNS çözümlemesine bağlıdır; ISP DNS'i
-zehirlendiğinde yanlış IP döner. Kritik uçları `/32` olarak eklemek, DNS'e hiç
-sormadan trafiği tünele sokar (DNS-independent route).
+**Ses blokları.** Ses ve görüntü trafiği, web trafiğinden farklı bloklardan çıkar.
+Bu bloklar tanımlanmadığında metin tabanlı özellikler çalışırken ses kanalları
+bağlanmayabilir.
 
----
+## 7. Bakım ve doğrulama
 
-## 🔄 Liste ne zaman güncellenir?
+Envanter, Discord altyapısındaki değişikliklere bağlı olarak güncellenmelidir. Önerilen
+periyot üç aydır. Doğrulama prosedürü aşağıdaki gibidir:
 
-Discord yeni bir ses bölgesi veya CDN ucu açtığında liste eskiler. Kontrol:
+1. Alan adlarının çözümlemesini kontrol edin:
 
 ```powershell
 Resolve-DnsName discord.com -Type A | Select-Object -ExpandProperty IPAddress
 Resolve-DnsName gateway.discord.gg -Type A | Select-Object -ExpandProperty IPAddress
 ```
 
-Dönen IP'ler `162.159.128.0/19` veya `66.22.192.0/18` içinde değilse listeye ekle.
+2. Dönen adreslerin 162.159.128.0/19 veya 66.22.192.0/18 blokları içinde olduğunu
+   doğrulayın.
+3. Blok dışında bir adres döndüğünde ilgili kaydı envantere ekleyin.
+4. Değişikliği ZT-002 veya ZT-006 prosedürü ile uygulayın.
 
----
+## 8. Sınırlamalar
 
-## ⚠️ Uyarı
+- 162.159.128.0/19 ve 104.18.0.0/20 blokları Cloudflare'in genel bloklarıdır. Bu
+  aralıklarda hizmet veren Discord dışındaki siteler de tünele girer.
+- Geniş bloklar, tünel üzerindeki trafik hacmini artırır. Ölçülü bir yapılandırma
+  gerektiğinde yalnızca /32 kayıtları kullanılabilir.
+- Envanter, Discord'un kullanmadığı bazı alan adlarını da içerebilir; bu kayıtlar
+  işlevsizdir ancak yapılandırmayı bozmaz.
+- Cloudflare panelinde split tunnel listesi için üst sınır bulunmaktadır. Mevcut
+  envanter bu sınırın altındadır; ileride eklenecek kayıtlarda sınır göz önünde
+  bulundurulmalıdır.
 
-`162.159.128.0/19` ve `104.18.0.0/20` **Cloudflare'a ait genel bloklardır**;
-sadece Discord değil, Cloudflare arkasındaki başka siteler de bu aralıklardan çıkar.
-Bu yüzden o sitelerin trafiği de tünele girer. Yavaşlama veya beklenmeyen konum
-sorunu görürsen bu iki satırı çıkarıp sadece `/32` pinleriyle devam et.
+## 9. İlgili belgeler
+
+- Yapılandırma prosedürü: [02-cloudflare-kurulumu.md](02-cloudflare-kurulumu.md)
+- Otomasyon: [06-otomasyon.md](06-otomasyon.md)

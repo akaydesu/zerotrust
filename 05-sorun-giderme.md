@@ -1,115 +1,113 @@
-# 🚑 Sorun Giderme
+# Arıza Tespiti ve Giderme
 
-Önce hızlı teşhis:
+| Alan | Değer |
+|---|---|
+| Belge kimliği | ZT-005 |
+| Sürüm | 1.0 |
+| Yayım tarihi | 01.11.2026 |
+| İlgili belgeler | ZT-002, ZT-004, ZT-006 |
 
-`@powershell
+## 1. Amaç
+
+Bu belge, kurulum sonrasında karşılaşılan bağlantı ve erişim sorunlarının
+sınıflandırılmasını ve giderilmesini tanımlar. Prosedürler, kök nedeni belirlemeye
+yönelik sıralı kontroller içerir.
+
+## 2. İlk teşhis
+
+Sorun bildirildiğinde aşağıdaki üç komut çalıştırılır ve çıktıları kaydedilir:
+
+```powershell
 warp-cli --accept-tos status
-warp-cli --accept-tos settings
 warp-cli --accept-tos registration show
-`@
+warp-cli --accept-tos settings
+```
 
----
+Bu çıktılar; bağlantı durumu, organizasyon kaydı ve tünel yapılandırması hakkında
+ilk değerlendirmeyi sağlar.
 
-## Belirti → neden → çözüm
+## 3. Belirti ve çözüm eşlemesi
 
-| Belirti | Olası neden | Çözüm |
+| Belirti | Olası neden | Uygulanacak işlem |
 |---|---|---|
-| WARP **"forbidden"** / "unable to connect" | Enrollment politikası bağlı değil | [02/3](02-cloudflare-kurulumu.md) — Device enrollment permissions → politikayı seç |
-| WARP bağlanıyor ama Discord açılmıyor | Split Tunnel **Exclude** modunda | Include'a al ([02/4](02-cloudflare-kurulumu.md)) |
-| Web açılıyor, **uygulama** açılmıyor | DNS önbelleği / eski oturum | `ipconfig /flushdns`, Discord'u tamamen kapat, WARP'ı yeniden bağla |
-| Ses kanalında **"RTC Connecting"** | `66.22.x` yok veya UDP kısıtlı | Listeye ses bloklarını ekle + MASQUE'a geç |
-| Ses geliyor ama **mikrofon** gitmiyor | UDP engeli | MASQUE (UDP/443) |
-| Sürekli **kopma / handshake** hatası | ISS UDP/2408'i kısıyor | MASQUE'a geç ([02/6](02-cloudflare-kurulumu.md)) |
-| Sayfalar **çok yavaş** | `162.159.128.0/19` çok geniş | Bu satırı çıkar, sadece `/32` pinlerini bırak |
-| Discord **davet linki** açılmıyor | `discord.gg` listede değil | `discord.gg` + `*.discord.gg` ekle |
-| Bir süre sonra **her şey** duruyor | WARP oturumu düşmüş | `warp-cli disconnect` → `connect` |
-| Cihaz panelde **görünmüyor** | Kayıt tamamlanmamış | `registration show` → Team/Organization doğru mu? |
+| İstemci "forbidden" veya "unable to connect" hatası veriyor | Cihaz kayıt izni tanımlı değil | ZT-002, Bölüm 5 |
+| Bağlantı kuruluyor, Discord açılmıyor | Split tunnel Exclude modunda | ZT-002, Bölüm 6.1 |
+| Web istemcisi açılıyor, uygulama açılmıyor | DNS önbelleği veya eski oturum | `ipconfig /flushdns`, uygulamayı kapatıp yeniden başlatma |
+| Ses kanalı "RTC Connecting" durumunda kalıyor | Ses blokları envanterde yok veya UDP kısıtlı | ZT-003, Bölüm 5.3; protokolü MASQUE yapma |
+| Ses geliyor, mikrofon çalışmıyor | Giden UDP kısıtı | Protokolü MASQUE yapma |
+| Bağlantı sık kopuyor | UDP/2408 kısıtı | ZT-002, Bölüm 7 |
+| Sayfa yüklemesi yavaş | Geniş anycast blokları | ZT-003, Bölüm 8 |
+| Davet bağlantıları açılmıyor | `discord.gg` kaydı eksik | ZT-003, Bölüm 5.1 |
+| Belirli aralıklarla tüm bağlantı duruyor | İstemci oturumu düşmüş | Bölüm 5, yeniden başlatma |
+| Cihaz panelde görünmüyor | Kayıt tamamlanmamış | `registration show` çıktısını kontrol etme |
 
----
+## 4. Ayrıntılı kontroller
 
-## 1. Tünel gerçekten Discord'u taşıyor mu?
+### 4.1 Tünel kapsamı
 
-`@powershell
-warp-cli --accept-tos tunnel host list | Select-String discord
-warp-cli --accept-tos tunnel ip list   | Select-String '66\.22'
-`@
+```powershell
+warp-cli --accept-tos tunnel host list
+warp-cli --accept-tos tunnel ip list
+```
 
-Liste boşsa panelde split tunnel kaydedilmemiş ya da istemci politikayı almamış
-demektir. İstemciyi yeniden başlat:
+Liste boşsa veya Discord kayıtlarını içermiyorsa panel yapılandırması istemciye
+ulaşmamıştır. İstemci hizmeti yeniden başlatılır:
 
-`@powershell
-Restart-Service CloudflareWARP
-`@
+```powershell
+Restart-Service -Name CloudflareWARP
+```
 
----
+### 4.2 DNS çözümlemesi
 
-## 2. DNS mi, tünel mi?
-
-`@powershell
+```powershell
 Resolve-DnsName discord.com -Type A
 Resolve-DnsName gateway.discord.gg -Type A
-`@
+```
 
-* `0.0.0.0`, `127.0.0.1` veya boş dönüyorsa → DNS tarafı sorunlu
-  (WARP kapalı olabilir ya da DoH devre dışı)
-* `162.159.x` dönüyorsa → DNS doğru, sorun tünelde/uçta
+- Sonuç boş veya `0.0.0.0` ise DNS katmanı sorunludur.
+- Sonuç 162.159.x aralığında ise çözümleme doğrudur; sorun tünel veya uç noktadadır.
 
----
+### 4.3 Port erişimi
 
-## 3. Port testi
-
-`@powershell
+```powershell
 Test-NetConnection gateway.discord.gg -Port 443
 Test-NetConnection discord.com -Port 443
-`@
+```
 
-`TcpTestSucceeded : False` ise:
+`TcpTestSucceeded` değeri `False` ise sırasıyla kontrol edilir: istemci bağlı mı,
+güvenlik duvarı WARP trafiğini engelliyor mu, ağ erişimi mevcut mu.
 
-* WARP bağlı mı?
-* Güvenlik duvarı/antivirüs WARP'ı engelliyor mu?
-* Ağ gerçekten internete çıkıyor mu (WARP'ı kapatıp dene)?
+### 4.4 Protokol
 
----
-
-## 4. Protokol kontrolü
-
-`@powershell
+```powershell
 warp-cli --accept-tos settings | Select-String 'protocol'
-`@
+```
 
-`WireGuard` görünüyorsa panelde MASQUE seçilmemiş ya da Save'e basılmamıştır.
-Panelden değiştirdikten sonra **mutlaka** istemciyi yeniden bağla.
+WireGuard görülüyorsa panelde MASQUE seçimi kaydedilmemiş olabilir. Ayar düzeltildikten
+sonra istemci yeniden bağlanır.
 
----
+## 5. Temiz yeniden başlatma
 
-## 5. Sıfırdan temiz test
+Bağlantı sorunlarının önemli bölümü aşağıdaki sıra ile giderilir:
 
-1. `warp-cli --accept-tos disconnect`
-2. `ipconfig /flushdns`
-3. Discord'u tamamen kapat (tepsiden çık)
-4. `warp-cli --accept-tos connect`
-5. `warp-cli --accept-tos status` → Connected
-6. Discord'u aç
+1. İstemciyi ayırın: `warp-cli --accept-tos disconnect`
+2. DNS önbelleğini temizleyin: `ipconfig /flushdns`
+3. Discord uygulamasını tamamen kapatın.
+4. İstemciyi bağlayın: `warp-cli --accept-tos connect`
+5. Durumu doğrulayın: `warp-cli --accept-tos status`
+6. Discord uygulamasını yeniden başlatın.
 
----
+## 6. Kayıtlar ve destek
 
-## 6. Log ve destek
+- İstemci kayıtları: `C:\ProgramData\Cloudflare\WARP\logs`
+- Panelde cihaz durumu: Zero Trust > Devices
+- Cloudflare hizmet durumu: <https://www.cloudflarestatus.com>
+- Ürün dokümantasyonu: <https://developers.cloudflare.com/cloudflare-one/>
 
-* WARP logları: `C:\ProgramData\Cloudflare\WARP\logs`
-* Panelde cihaz durumu: **Zero Trust → Devices**
-* Cloudflare status: <https://www.cloudflarestatus.com>
-* Cloudflare One dokümanları: <https://developers.cloudflare.com/cloudflare-one/>
+Destek talebi oluşturulurken İstemci sürümü, işletim sistemi sürümü, `status` çıktısı
+ve sorunun gözlemlediği saat aralığı eklenmelidir.
 
----
+## 7. İlgili belgeler
 
-## 7. Hâlâ olmuyorsa
-
-| Kontrol | Komut / yer |
-|---|---|
-| Takım adı doğru mu | `registration show` → Organization |
-| Politika e-postanı kapsıyor mu | Panel → Access → Policies |
-| Split tunnel include mu | `settings` → "Include mode" |
-| Kaç kural var | `tunnel host list` + `tunnel ip list` |
-| Cihaz panelde kayıtlı mı | Panel → Devices |
-
-Sorun devam ederse [06-otomasyon.md](06-otomasyon.md) ile listeyi baştan, eksiksiz uygula.
+- Panel yapılandırması: [02-cloudflare-kurulumu.md](02-cloudflare-kurulumu.md)
+- İstemci kurulumu: [04-warp-kurulumu.md](04-warp-kurulumu.md)

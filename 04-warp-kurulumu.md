@@ -1,108 +1,169 @@
-# 💻 WARP İstemcisi Kurulumu ve Giriş
+# İstemci Kurulumu ve Bağlantı Doğrulaması
 
-Panel tarafı bittiyse sıra cihazda. Süre: ~5 dakika.
+| Alan | Değer |
+|---|---|
+| Belge kimliği | ZT-004 |
+| Sürüm | 1.0 |
+| Yayım tarihi | 01.11.2026 |
+| Tahmini süre | 10 dakika |
+| İlgili belgeler | ZT-002, ZT-003, ZT-005 |
 
----
+## 1. Amaç
 
-## 1. İndir ve kur
+Bu belge, WARP istemcisinin kurulumunu, organizasyona kaydını ve bağlantının
+doğrulanmasını tanımlar. Prosedür, ZT-002 belgesindeki panel yapılandırması
+tamamlandıktan sonra uygulanır.
 
-1. <https://one.one.one.one/warp/> → **Download for Windows**
-2. `Cloudflare_WARP_Setup.exe` dosyasını çalıştır
-3. Kurulum sonrası WARP sistem tepsisinde (sağ alt) görünür
+## 2. Ön koşullar
 
-> Kurulum yönetici hakları ister. Kurumsal antivirüs/EDR varsa WARP servisine izin ver.
+- ZT-002 tamamlanmış olmalıdır (organizasyon, politika, split tunnel, protokol).
+- İstemcide yerel yönetici hakları bulunmalıdır.
+- Cihaz internete erişebiliyor olmalıdır.
 
----
+## 3. Kurulum
 
-## 2. Zero Trust takımına giriş yap
+### 3.1 Kurulum dosyasının edinilmesi
 
-**Arayüzden:**
+1. <https://one.one.one.one/warp/> adresine gidin.
+2. Windows için kurulum dosyasını indirin.
+3. Dosyanın imzalı ve resmî kaynaktan geldiğini doğrulayın.
 
-1. Tepsideki WARP simgesine tıkla → **Ayarlar (dişli)**
-2. **Hesap (Account)** sekmesi
-3. **Cloudflare Zero Trust ile oturum aç** / *Login with Cloudflare Zero Trust*
-4. Takım adını yaz: `akaydesu` (02. bölümde belirlediğin ad)
-5. Tarayıcı açılır → e-posta gir → gelen kodu yaz
-6. "Connected" durumuna geçer
+### 3.2 Kurulumun yapılması
 
-**Komut satırından (aynı iş):**
+1. Kurulum dosyasını yönetici olarak çalıştırın.
+2. Sihirbazı varsayılan seçeneklerle tamamlayın.
+3. Kurulum sonunda `Cloudflare WARP` hizmetinin çalıştığını doğrulayın.
 
 ```powershell
-warp-cli --accept-tos teams-enroll akaydesu
-# tarayıcı açılır, e-posta doğrulaması yapılır
+Get-Service -Name CloudflareWARP | Select-Object Status, StartType
+warp-cli --version
+```
+
+Beklenen durum: hizmet `Running`, başlangıç türü `Automatic`.
+
+## 4. Organizasyona kayıt
+
+### 4.1 Arayüz üzerinden kayıt
+
+1. Sistem tepsisindeki WARP simgesine tıklayın.
+2. **Ayarlar** bölümüne girin.
+3. **Hesap** sekmesinde **Cloudflare Zero Trust ile oturum aç** seçeneğini kullanın.
+4. ZT-002 belgesinde belirlenen takım adını girin.
+5. Açılan tarayıcı penceresinde kurumsal veya kişisel e-posta adresinizi girin.
+6. E-posta ile gönderilen doğrulama kodunu girin.
+7. İstemcinin bağlandığını doğrulayın.
+
+### 4.2 Komut satırı üzerinden kayıt
+
+Arayüz kullanılmadan aynı işlem aşağıdaki komutlarla yapılabilir:
+
+```powershell
+warp-cli --accept-tos teams-enroll <takim-adi>
 warp-cli --accept-tos connect
 ```
 
----
+Komut, tarayıcıda kimlik doğrulama penceresi açar. Doğrulama tamamlandığında istemci
+otomatik olarak bağlanır.
 
-## 3. Bağlantıyı doğrula
+### 4.3 Kaydın doğrulanması
+
+```powershell
+warp-cli --accept-tos registration show
+```
+
+Çıktıda `Account type: Team` ve beklenen organizasyon adı görülmelidir. Kayıt
+türünün `Team` olmaması, istemcinin organizasyona değil genel WARP hizmetine
+kaydedildiğini gösterir.
+
+## 5. Bağlantının doğrulanması
+
+### 5.1 Durum kontrolü
 
 ```powershell
 warp-cli --accept-tos status
-# Status update: Connected
-
-warp-cli --accept-tos registration show
-# Account type: Team
-# Organization: akaydesu
-
-warp-cli --accept-tos settings
-# WARP tunnel protocol: MASQUE      ← hedef
-# Include mode, with hosts/ips:     ← liste burada görünür
 ```
 
-Beklenen: `Connected`, `MASQUE` ve include listesinde Discord kayıtları.
+Beklenen çıktı: `Connected`. `Disconnected` veya `Unable to connect` durumunda
+ZT-005 belgesindeki prosedür uygulanır.
 
----
-
-## 4. Gerçek test
-
-1. Tarayıcıda <https://discord.com/login> aç
-2. Discord uygulamasını aç, giriş yap
-3. Bir ses kanalına gir, mikrofon testi yap
-4. Kanal listesi, ekran görüntüleri, davet linki (`discord.gg/...`) dene
+### 5.2 Yapılandırma kontrolü
 
 ```powershell
-# DNS ve TCP hızlı kontrol
+warp-cli --accept-tos settings
+```
+
+Aşağıdaki değerler doğrulanır:
+
+| Alan | Beklenen değer |
+|---|---|
+| WARP tunnel protocol | MASQUE |
+| Split tunnel modu | Include mode |
+| Include listesi | Discord kayıtlarını içerir |
+
+### 5.3 Tünel kapsamının kontrolü
+
+```powershell
+warp-cli --accept-tos tunnel ip list
+warp-cli --accept-tos tunnel host list
+```
+
+Listelerde Discord'a ait IP blokları ve alan adları görülmelidir. Liste boşsa panel
+yapılandırması istemciye ulaşmamıştır; istemci yeniden başlatılır.
+
+## 6. İşlevsel doğrulama
+
+Kurulumun tamamlandığı, aşağıdaki adımlarla doğrulanır:
+
+1. Tarayıcıda `https://discord.com/login` adresini açın.
+2. Discord uygulamasını başlatın ve oturum açın.
+3. Bir ses kanalına bağlanın ve mikrofon testi yapın.
+4. Kanal listesinin, ek görsellerin ve davet bağlantılarının yüklendiğini doğrulayın.
+
+Ek olarak DNS ve port erişimi kontrol edilebilir:
+
+```powershell
 Resolve-DnsName discord.com -Type A | Select-Object -ExpandProperty IPAddress
 Test-NetConnection gateway.discord.gg -Port 443
 ```
 
----
-
-## 5. Protokol gerçekten MASQUE mu?
+## 7. Protokolün doğrulanması
 
 ```powershell
-warp-cli --accept-tos settings | Select-String 'protocol|Mode'
+warp-cli --accept-tos settings | Select-String 'protocol'
 ```
 
-`WireGuard` yazıyorsa panelde 02/6. adımı tekrar kontrol et ve istemciyi
-yeniden başlat:
+`WireGuard` değeri görülüyorsa paneldeki protokol ayarı kaydedilmemiş veya istemci
+politikayı henüz almamıştır. İstemci yeniden bağlanır:
 
 ```powershell
 warp-cli --accept-tos disconnect
+Start-Sleep -Seconds 2
 warp-cli --accept-tos connect
 ```
 
----
+## 8. İşletim notları
 
-## 6. Otomatik başlatma
+- İstemci, bilgisayar açılışında otomatik başlatılmalıdır. Bu ayar WARP arayüzündeki
+  genel ayarlar bölümünden yapılır.
+- İstemci kapalıyken tünel devre dışı kalır ve Discord erişimi etkilenebilir.
+- Sürüm güncellemeleri otomatik olarak uygulanır; kurumsal ortamlarda güncelleme
+  penceresi ayrıca planlanabilir.
+- Uzun süreli oturumlarda bağlantı düşebilir; ZT-005 belgesindeki yeniden başlatma
+  prosedürü uygulanır.
 
-* WARP → Ayarlar → **Genel** → "Bilgisayar açıldığında başlat" açık olsun.
-* Discord'un ağ sorunları genelde WARP kapalıyken ortaya çıkar; kapalıysa Discord
-  yine engellenir.
+## 9. Kayıt silme ve kaldırma
 
----
-
-## 7. Kaldırma / geri alma
+Cihazı organizasyondan çıkarmak için:
 
 ```powershell
 warp-cli --accept-tos disconnect
-warp-cli --accept-tos registration delete   # cihaz kaydını siler
+warp-cli --accept-tos registration delete
 ```
 
-Sonra Windows "Uygulamalar"dan Cloudflare WARP'ı kaldır.
-Panelde cihaz **Devices** listesinde kalırsa oradan da silebilirsin.
+Ardından istemci Windows üzerinden kaldırılır. Panelde **Devices** listesinde kalan
+kayıtlar varsa ilgili yerden silinir.
 
----
+## 10. İlgili belgeler
 
-Sorun mu var? 👉 [05-sorun-giderme.md](05-sorun-giderme.md)
+- Panel yapılandırması: [02-cloudflare-kurulumu.md](02-cloudflare-kurulumu.md)
+- Arıza giderme: [05-sorun-giderme.md](05-sorun-giderme.md)
