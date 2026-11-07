@@ -107,16 +107,7 @@ değiştirildiğinde cihaz kaydı veya tünel yapılandırması tamamlanmayabili
 5. Bağlantının doğrulanması (ZT-004, Bölüm 5)
 6. Sorun halinde arıza giderme prosedürlerinin uygulanması (ZT-005)
 
-## 7. Sürümleme ve bakım
-
-Dokümanlar Git üzerinde sürümlenir. Her değişiklik, commit mesajında değişen belge
-kimliğini belirtecek şekilde kaydedilir. Ayrıntılı değişiklik geçmişi depo commit
-kayıtlarında tutulur.
-
-Adres envanteri (ZT-003) dış kaynaklı veriler içerdiğinden düzenli aralıklarla
-doğrulanmalıdır. Doğrulama yöntemi ilgili belgede açıklanmıştır.
-
-## 8. Güvenlik ve uyum notları
+## 7. Güvenlik ve uyum notları
 
 - Dokümanlarda kimlik bilgisi, API anahtarı veya kuruma özel bilgi bulunmaz.
 - API anahtarları yalnızca ilgili prosedür sırasında, geçici olarak kullanılmalıdır.
@@ -125,7 +116,7 @@ doğrulanmalıdır. Doğrulama yöntemi ilgili belgede açıklanmıştır.
 - Ücretsiz plan, kullanıcı ve cihaz sayısı açısından sınırlıdır; üretim ortamında lisans
   koşulları ayrıca kontrol edilmelidir.
 
-## 9. Kaynakça
+## 8. Kaynakça
 
 - Cloudflare One dokümantasyonu: <https://developers.cloudflare.com/cloudflare-one/>
 - Split Tunnels: <https://developers.cloudflare.com/cloudflare-one/connections/connect-devices/warp/configure-warp/route-traffic/split-tunnels/>
