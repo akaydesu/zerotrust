@@ -129,11 +129,4 @@ doğrulanmalıdır. Doğrulama yöntemi ilgili belgede açıklanmıştır.
 
 - Cloudflare One dokümantasyonu: <https://developers.cloudflare.com/cloudflare-one/>
 - Split Tunnels: <https://developers.cloudflare.com/cloudflare-one/connections/connect-devices/warp/configure-warp/route-traffic/split-tunnels/>
-- WARP istemcisi: <https://one.one.one.one/warp/>
-- Adres envanterinin bir bölümü: <https://github.com/sertay1/WarpZeroTrustConfigure>
-
-## 10. Sürüm geçmişi
-
-| Sürüm | Tarih | Açıklama |
-|---|---|---|
-| 1.0 | 01.11.2026 | Doküman setinin yayımlanması |
+- WARP istemcisi: <https://developers.cloudflare.com/cloudflare-one/team-and-resources/devices/cloudflare-one-client/download/>
