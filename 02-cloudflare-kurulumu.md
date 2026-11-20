@@ -1,182 +1,182 @@
-# Cloudflare Zero Trust Yapılandırması
+# Cloudflare Zero Trust (Cloudflare One) Panel Yapılandırması
+
+<div align="right">
+  <b>🌐 Dil / Language:</b> 🇹🇷 <b>Türkçe</b> | <a href="en/02-cloudflare-setup.md">🇬🇧 English</a>
+</div>
+
+---
 
 | Alan | Değer |
 |---|---|
-| Belge kimliği | ZT-002 |
-| Sürüm | 1.0 |
-| Yayım tarihi | 01.11.2026 |
-| Tahmini süre | 15 dakika |
-| İlgili belgeler | ZT-001, ZT-003, ZT-004 |
+| **Belge kimliği** | ZT-002 |
+| **Sürüm** | 2.0 (Güncel Cloudflare One Paneli) |
+| **Yayım tarihi** | 20.11.2026 |
+| **Tahmini süre** | 10 - 15 dakika |
+| **İlgili belgeler** | [ZT-001](01-zero-trust-nedir.md), [ZT-003](03-ip-ve-dns.md), [ZT-004](04-warp-kurulumu.md), [ZT-006](06-otomasyon.md) |
 
 ## 1. Amaç
 
-Bu belge, Cloudflare Zero Trust panelinde yapılması gereken yapılandırmayı adım adım
-tanımlar. Prosedür tamamlandığında organizasyon, erişim politikası, cihaz kayıt izni,
-split tunnel listesi ve tünel protokolü hazır durumda olur.
+Bu belge, en güncel Cloudflare Zero Trust (**Cloudflare One**) panelinde yapılması gereken yapılandırmayı gerçek ve güncel ekran görüntüleri ile adım adım tanımlar. Prosedür tamamlandığında organizasyon (`Team domain`), erişim politikası (`Access controls > Policies`), cihaz kayıt izni (`Device enrollment`), Split Tunnel Include listesi ve **MASQUE** tünel protokolü hazır durumda olur.
 
 ## 2. Ön koşullar
 
-- Cloudflare hesabı
+- Cloudflare hesabı (<https://dash.cloudflare.com> üzerinden ücretsiz oluşturulabilir)
 - Zero Trust hizmetine erişim yetkisi
-- ZT-003 belgesindeki adres envanteri
-- Discord uygulaması kapalı olmalıdır (doğrulama sonrası açılacaktır)
+- [ZT-003](03-ip-ve-dns.md) belgesindeki adres envanteri (veya otomatik yükleme için [ZT-006](06-otomasyon.md) betiği)
+- Discord uygulaması kurulum boyunca **kapalı** olmalıdır (doğrulama sonrası açılacaktır)
 
-## 3. Organizasyonun oluşturulması
+---
 
-### 3.1 Hesap ve hizmet erişimi
+## 3. Organizasyonun ve Takım Alan Adının (`Team domain`) oluşturulması
+
+### 3.1 Hesap ve Zero Trust paneline giriş
 
 1. <https://dash.cloudflare.com> adresine giriş yapın.
-2. Sol menüden **Zero Trust** bölümüne geçin.
-3. Hizmet ilk kez kullanılıyorsa kurulum sihirbazını başlatın.
+2. Sol menüdeki **Protect & connect** başlığı altından **Zero Trust** bölümüne tıklayın.
+3. Hizmet ilk kez kullanılıyorsa kurulum sihirbazı (Onboarding) başlayacaktır; bir takım adı belirleyip **Zero Trust Free** ($0/ay, 50 kullanıcıya kadar ücretsiz) planını seçin.
 
-### 3.2 Takım adının belirlenmesi
+### 3.2 Takım adının (`Team domain`) kontrol edilmesi
 
-1. Sihirbazda takım adı (team name) istenir.
-2. Ad; küçük harf, rakam ve tire içerebilir. Örnek: `ornek-takim`
-3. Takım adı, `ornek-takim.cloudflareaccess.com` biçiminde bir alan adı oluşturur.
-4. Bu ad, WARP istemcisinin organizasyona kaydı sırasında kullanılacaktır.
+1. Sol menüden **Zero Trust > Settings** sayfasına gidin.
+2. **Team domain** kartında takım adınızın (`<takim-adi>.cloudflareaccess.com`) tanımlı olduğunu doğrulayın:
 
-Takım adı sonradan değiştirilebilir; ancak bu durumda kayıtlı cihazların yeniden
-kaydedilmesi gerekir. Bu nedenle ad, kurulum öncesinde kesinleştirilmelidir.
+![Adım 1 - Zero Trust Settings Team Domain](assets/screenshots/01-policy-basic-info.png)
 
-### 3.3 Plan seçimi
+- **Önemli:** Burada görünen `<takim-adi>` (örneğin `takim-adi.cloudflareaccess.com` adresindeki ilk kısım), bilgisayarınızdaki WARP istemcisini Zero Trust moduna kaydederken kullanacağınız addır.
 
-1. Plan listesinden **Free** seçeneğini işaretleyin.
-2. Ücretsiz plan, tanımlı kullanıcı ve cihaz sınırına sahiptir.
-3. Bazı hesaplarda kimlik doğrulama amacıyla ödeme yöntemi bilgisi istenebilir; ücretsiz
-   planda ücret tahsil edilmez.
+---
 
-### 3.4 Doğrulama
+## 4. Erişim politikasının (`Access controls > Policies`) tanımlanması
 
-Tarayıcıda `https://<takim-adi>.cloudflareaccess.com` adresinin açıldığını doğrulayın.
+Zero Trust, güvenlik gereği varsayılan olarak hiçbir cihazın takımınıza kaydedilmesine izin vermez. Bilgisayarınızı takımınıza bağlayabilmek için önce e-posta adresinize izin veren bir erişim politikası oluşturmalısınız.
 
-## 4. Erişim politikasının tanımlanması
+### 4.1 Yeni politika oluşturma
 
-Zero Trust, varsayılan olarak hiçbir cihazın kaydedilmesine izin vermez. Cihaz kaydı
-öncesinde bir erişim politikası tanımlanmalıdır. Politika iki yolla oluşturulabilir:
-cihaz kayıt ekranından doğrudan veya yeniden kullanılabilir politika olarak.
+1. Sol menüden **Zero Trust > Access controls > Policies** bölümüne gidin (`Reusable policies` sekmesi).
+2. Sağ üstteki **+ Add a policy** düğmesine tıklayın (veya mevcut politikanızı **Configure** ile düzenleyin).
+3. Politika alanlarını aşağıdaki gibi yapılandırın:
 
-### 4.1 Yeniden kullanılabilir politika oluşturma
+![Adım 2 - Access Controls Policy Details](assets/screenshots/02-policy-add-rules.png)
 
-1. **Access > Policies** bölümüne gidin.
-2. **Add a policy** seçeneğini kullanın.
-3. Aşağıdaki alanları doldurun:
-
-| Alan | Değer |
-|---|---|
-| Name | `discord-enroll` |
-| Action | Allow |
-| Include | Emails ending in **gmail.com** (kuruma göre değiştirilir) |
-| Session duration | 24 hours |
+| Alan | Değer | Açıklama |
+|---|---|---|
+| **Policy Name** | `email` veya `discord-enroll` | Politikanızı tanımak için verilen isim |
+| **Action** | `Allow` | Eşleşen kullanıcıların cihaz kaydetmesine izin verir |
+| **Session duration** | `No duration, expires immediately` veya `24 hours` | Kayıt oturum süresi |
+| **Policy rules > Include** | `Selector: Emails` → `Value: kullanici@ornek.com` | WARP istemcisine giriş yaparken tek kullanımlık doğrulama kodu (OTP) alacağınız kendi e-posta adresiniz |
 
 4. Politikayı kaydedin.
 
-Kurumsal kullanımda "Emails ending in" yerine tek tek adres tanımlamak veya bir kimlik
-sağlayıcı (IdP) grubu kullanmak daha uygundur. Ücretsiz planda IdP entegrasyonu
-sınırlıdır; bu nedenle alan adı bazlı kural yaygın olarak tercih edilir.
+---
 
-### 4.2 Doğrulama
+## 5. Cihaz kayıt izninin (`Device enrollment permissions`) bağlanması
 
-Politika listesinde `discord-enroll` kaydının göründüğünü kontrol edin.
+Oluşturduğumuz erişim politikasını şimdi Cloudflare One / WARP cihaz kayıtlarına bağlamamız gerekiyor.
 
-## 5. Cihaz kayıt izninin bağlanması
+> [!IMPORTANT]
+> Bu adım atlandığında WARP istemcisi takımınıza kaydolamaz ve giriş sırasında **"Forbidden"** veya **"Unable to connect"** hatası verir.
 
-1. **Settings > WARP Client** bölümüne gidin.
-2. **Device enrollment permissions** başlığı altındaki **Manage** düğmesini kullanın.
-3. **Select existing policies** seçeneğinden `discord-enroll` politikasını seçin.
-4. Değişikliği kaydedin.
+1. Sol menüden **Zero Trust > Team & Resources > Devices** bölümüne gidin.
+2. Üstteki sekmelerden **Management** sekmesine geçin.
+3. **Device enrollment > Device enrollment permissions** karşısındaki **Manage** düğmesine tıklayın.
+4. **Device enrollment policies** tablosunda `Add existing policy` kutusundan az önce oluşturduğunuz politikayı (`email` / `discord-enroll`) seçip ekleyin:
 
-Bu adım atlandığında WARP istemcisi organizasyona kaydolamaz ve bağlantı kurulamaz.
-Karşılaşılan "forbidden" veya "unable to connect" hatalarının en yaygın nedeni budur.
+![Adım 3 - Device Enrollment Permissions](assets/screenshots/03-device-enrollment-permissions.png)
 
-### 5.1 Doğrulama
+5. Sağ alttaki **Save** düğmesine basarak kaydedin.
 
-Cihaz kayıt ekranında politikaya bağlı bir kuralın listelendiğini doğrulayın.
+---
 
-## 6. Split Tunnel yapılandırması
+## 6. Cihaz Profili, MASQUE Protokolü ve Split Tunnel Yapılandırması
 
-### 6.1 Modun seçilmesi
+Varsayılan olarak WARP tüm internet trafiğinizi tüneller. Oyunlarda ping olmaması, yalnızca Discord'un tünelden geçmesi ve İSS/DPI engellerine takılmamak için **Default** cihaz profilini yapılandıracağız.
 
-1. **Settings > WARP Client > Device settings** bölümüne gidin.
-2. **Default** profilin karşısındaki **Configure** düğmesini kullanın.
-3. **Split Tunnels** bölümünde modu **Include IPs and domains** olarak değiştirin.
-4. Kaydedin.
+### 6.1 Default cihaz profilini açma
 
-Mod seçimi, tünelin kapsamını belirler:
+1. Sol menüden **Zero Trust > Team & Resources > Devices** sayfasına dönün ve üstten **Device profiles** sekmesine tıklayın.
+2. **General profiles** tablosunda yer alan **Default** profiline tıklayın (veya sağındaki `⋯` menüsünden düzenleyin):
 
-| Mod | Davranış |
-|---|---|
-| Exclude | Listede olmayan tüm trafik tünellenir |
-| Include | Yalnızca listede olan trafik tünellenir |
+![Adım 4 - Device Profiles Listesi](assets/screenshots/04-device-profile-configure.png)
 
-Discord odaklı kurulumda **Include** modu kullanılır. Böylece diğer uygulamaların
-trafiği yerel ağ üzerinden çıkmaya devam eder.
+3. Açılan **Default** profil sayfasında sağ üstteki **Edit profile settings** düğmesine tıklayın.
 
-### 6.2 Kayıtların eklenmesi
+### 6.2 Servis modu ve Tünel protokolünün MASQUE (`Recommended`) seçilmesi
 
-1. Aynı sayfada **Manage** düğmesini kullanın.
-2. Her kayıt için hedef türünü seçin:
-   - IP adresi veya CIDR bloğu için **IP Address**
-   - Alan adı için **Domain**
-3. Değeri girin ve **Save destination** ile kaydedin.
-4. Envanterdeki tüm kayıtlar eklendikten sonra sayfayı kaydedin.
+`Edit "Default" profile` sayfasında ilk olarak **Service mode** ve **Device tunnel protocol** ayarları yer alır:
 
-Envanter ZT-003 belgesinde tanımlıdır. Kayıt sayısı fazla olduğunda panel üzerinden
-giriş pratik değildir; ZT-006 belgesinde tanımlanan API yöntemi kullanılabilir.
+![Adım 5 - Service Mode ve Device Tunnel Protocol MASQUE](assets/screenshots/07-device-tunnel-protocol-masque.png)
 
-### 6.3 Doğrulama
+1. **Service mode:** **`Traffic and DNS mode`** seçili olmalıdır (hem Discord IP/port trafiğini yönlendirir hem de DNS sorgularını Cloudflare DoH üzerinden çözer).
+2. **Device tunnel protocol:** **`MASQUE` (`Recommended`)** seçeneğini işaretleyin.
 
-Include listesinde en azından hızlı kurulum setinin (ZT-003, Bölüm 4) bulunduğunu
-doğrulayın.
+#### Neden WireGuard yerine MASQUE seçilmeli? (Detaylı Karşılaştırma)
 
-## 7. Tünel protokolünün seçilmesi
+Güncel Cloudflare One panelinde **MASQUE** protokolünün yanında **`Recommended` (Önerilen)** etiketi yer alır ve açıklama kısmında *"The default protocol with post-quantum cryptography and support for all Cloudflare One Client features. It has improved network compatibility compared to WireGuard."* ifadesi bulunur.
 
-1. **Configure** ekranında **Device tunnel protocol** alanına ilerleyin.
-2. **MASQUE** seçeneğini işaretleyin.
-3. Kaydedin.
+- **Neden MASQUE Daha İyi?**
+  1. **Standart HTTPS/QUIC Görünümü (`UDP/443`):** WireGuard `UDP/2408` portunu kullanır ve İSS'lerin DPI (Derin Paket İnceleme) sistemleri tarafından kolayca tespit edilip engellenebilir veya yavaşlatılabilir. **MASQUE** ise trafiği `UDP/443` üzerinden **HTTP/3 (QUIC)** protokolüyle taşır; bu sayede normal bir web sitesine (HTTPS) bağlanıyormuşsunuz gibi görünür ve ağ engellerine takılmaz.
+  2. **Otomatik HTTP/2 (`TCP/443`) Yedeklemesi (Fallback):** Ağınızda UDP tamamen engellense bile MASQUE otomatik olarak `TCP/443` (HTTP/2) moduna düşerek bağlantıyı koparmaz.
+  3. **Discord Ses (`RTC Connecting`) Çözümü:** Ses kanallarında yaşanan `RTC Connecting` takılmalarının ve ses kopmalarının en büyük nedeni WireGuard UDP paketlerinin düşürülmesidir. MASQUE bu sorunu ortadan kaldırır.
+  4. **Kuantum Sonrası Şifreleme (Post-Quantum Cryptography):** MASQUE, kuantum bilgisayar saldırılarına karşı gelişmiş şifreleme (`ML-KEM`) içerir ve tüm Cloudflare One istemci özelliklerini destekler (WireGuard seçildiğinde panelde uyarıldığı üzere `Local proxy mode` gibi bazı özellikler devre dışı kalır).
 
-Protokol değişikliği, istemci yeniden bağlandığında etkinleşir. İstemci tarafındaki
-adımlar ZT-004 belgesinde açıklanmıştır.
+### 6.3 Split Tunnels modunu "Include IPs and domains" yapma
 
-## 8. Yapılandırmanın doğrulanması
+1. Aynı `Edit "Default" profile` sayfasında biraz aşağı kaydırarak **Split Tunnels** bölümüne gelin.
+2. Modu **`Include IPs and domains`** olarak işaretleyin ve sağ alttaki **Save profile** düğmesine basarak profili kaydedin:
 
-Aşağıdaki tablo, panel tarafındaki yapılandırmanın tamamlanıp tamamlanmadığını
-denetlemek için kullanılır.
+![Adım 6 - Split Tunnels Include IPs and domains ve MASQUE](assets/screenshots/05-split-tunnels-include-mode.png)
 
-| No | Denetim | Beklenen durum |
+| Mod | Davranış | Bu Kurulumdaki Tercih |
 |---|---|---|
-| 1 | Takım adı | Tanımlı ve erişilebilir |
-| 2 | Erişim politikası | Allow kuralı mevcut |
-| 3 | Cihaz kayıt izni | Politikaya bağlı |
-| 4 | Split Tunnel modu | Include |
-| 5 | Adres envanteri | En az hızlı set yüklü |
-| 6 | Tünel protokolü | MASQUE |
+| **Exclude IPs and domains** | Listede olmayan **tüm sistem trafiği** tünellenir | ❌ Kullanılmaz |
+| **Include IPs and domains** | **Yalnızca listede olan** IP ve alan adları tünellenir | ✅ **Seçilmesi gereken mod** |
 
-## 9. Geri alma
+---
 
-Yapılandırmayı geri almak için aşağıdaki sıra izlenir:
+## 7. Discord IP ve alan adı kayıtlarının eklenmesi
 
-1. **Device settings** ekranında Split Tunnel modunu eski değerine döndürün.
-2. Include listesindeki kayıtları kaldırın.
-3. Tünel protokolünü önceki değere alın.
-4. Cihaz kayıt iznini kaldırın.
-5. Gerekirse organizasyonu ve politikayı silin.
+> [!TIP]
+> **Otomatik Yükleme (Önerilen):** 164 adet IP ve alan adını tek tek elle yapıştırmak yerine, yukarıdaki **Include IPs and domains** ve **MASQUE** seçimini kaydettikten sonra [06-otomasyon.md](06-otomasyon.md) rehberindeki `Apply-DiscordZeroTrust.ps1` betiğini çalıştırarak tüm 164 kuralı **10 saniyede otomatik** yükleyebilirsiniz!
 
-Liste değişikliklerini geri almak için ZT-006 belgesindeki yedekleme yöntemi
-kullanılabilir.
+Kayıtları panel üzerinden **manuel** eklemek istiyorsanız:
 
-## 10. Sık karşılaşılan yapılandırma hataları
+1. `Devices > General profiles > Default` sayfasında üstteki **Split tunnels** sekmesine geçin (veya profil düzenleme ekranında Split Tunnels karşısındaki **Manage** düğmesine basın).
+2. Sağ üstteki **Add split tunnel entries** düğmesine tıklayın:
 
-| Hata | Etki |
-|---|---|
-| Cihaz kayıt izninin bağlanmaması | WARP organizasyona kaydolamaz |
-| Split Tunnel modunun Exclude bırakılması | Discord tünellenmez, engel sürer |
-| Alan adının IP alanına girilmesi | Kayıt reddedilir veya işlevsiz kalır |
-| Protokolün seçilip kaydedilmemesi | Değişiklik uygulanmaz |
-| Include ve Exclude listelerinin birlikte doldurulması | Kural çakışması oluşur |
+![Adım 7 - Split Tunnels Add Entries](assets/screenshots/06-split-tunnels-selector.png)
 
-## 11. İlgili belgeler
+3. Açılan **Add split tunnel entries** formunda:
+   - **IP adresi veya CIDR bloğu** (örn. `162.159.128.0/19`, `66.22.192.0/18`) eklerken: **Selector** olarak **`IP Address`** seçin, **Value** kısmına IP/CIDR değerini yazıp **Add to list** düğmesine basın.
+   - **Alan adı** (örn. `discord.com`, `*.discord.com`, `*.discord.gg`) eklerken: **Selector** olarak **`Domain`** seçin, **Value** kısmına alan adını yazıp **Add to list** düğmesine basın.
+4. Tüm kayıtları listeye ekledikten sonra sağ alttaki **Save entries** düğmesine basarak kaydedin.
 
-- Kavramsal çerçeve: [01-zero-trust-nedir.md](01-zero-trust-nedir.md)
-- Adres envanteri: [03-ip-ve-dns.md](03-ip-ve-dns.md)
-- İstemci kurulumu: [04-warp-kurulumu.md](04-warp-kurulumu.md)
+---
+
+## 8. Yapılandırma kontrol listesi
+
+WARP istemci kurulumuna ([ZT-004](04-warp-kurulumu.md)) geçmeden önce paneldeki ayarlarınızı aşağıdaki tablo ile doğrulayın:
+
+| No | Denetim Noktası | Güncel Menü Konumu | Beklenen Durum |
+|---|---|---|---|
+| **1** | Takım alan adı | `Zero Trust > Settings > Team domain` | `<takim-adi>.cloudflareaccess.com` aktif |
+| **2** | Erişim politikası | `Zero Trust > Access controls > Policies` | `Allow` kuralı ve e-posta adresiniz tanımlı |
+| **3** | Cihaz kayıt izni | `Zero Trust > Team & Resources > Devices > Management` | `Device enrollment permissions` altında politikanız ekli |
+| **4** | Tünel protokolü | `Devices > Device profiles > Default > Edit profile settings` | **MASQUE (`Recommended`)** |
+| **5** | Split Tunnel modu | `Devices > Device profiles > Default > Edit profile settings` | **Include IPs and domains** |
+| **6** | Adres envanteri | `Devices > Device profiles > Default > Split tunnels` | En az 15 kayıtlık hızlı set veya 164 tam kayıt yüklü |
+
+## 9. Sık karşılaşılan yapılandırma hataları
+
+| Hata | Etki | Çözüm |
+|---|---|---|
+| Cihaz kayıt izninin (`Device enrollment permissions`) bağlanmaması | WARP takım adını kabul etmez veya e-posta sonrası `Forbidden` verir | Bölüm 5'teki gibi politikanızı `Devices > Management > Device enrollment permissions` altına ekleyin |
+| Split Tunnel modunun `Exclude` bırakılması | Discord tünellenmez veya tüm bilgisayar trafiği tünele girer | Bölüm 6.3'teki gibi `Include IPs and domains` yapın |
+| Alan adının `IP Address` seçili iken girilmesi | Panel kabul etmez veya kural çalışmaz | Alan adları için `Selector: Domain`, IP'ler için `Selector: IP Address` seçin |
+| Protokolün `WireGuard` bırakılması | Ses kanalları `RTC Connecting`'de kalır veya UDP/2408 engeline takılır | Bölüm 6.2'deki gibi `MASQUE (Recommended)` seçip profili kaydedin |
+
+## 10. İlgili belgeler
+
+- Önceki belge (Mimari & Protokol Analizi): [01-zero-trust-nedir.md](01-zero-trust-nedir.md)
+- Adres ve alan adı listesi: [03-ip-ve-dns.md](03-ip-ve-dns.md)
+- Sonraki adım (WARP İstemci Kurulumu): [04-warp-kurulumu.md](04-warp-kurulumu.md)
+- Otomatik API kurulumu: [06-otomasyon.md](06-otomasyon.md)
